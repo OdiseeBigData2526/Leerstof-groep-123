@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  hello-world:
+    build:
+      context: ./oefening 1
+    container_name: hello-world-container
+
+  requests-script:
+    build:
+      context: ./oefening 2
+    container_name: requests-script-container
+
+  file-reader:
+    build:
+      context: ./oefening 3
+    container_name: file-reader-container
