@@ -1,7 +1,6 @@
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import explode
-from pyspark.sql.functions import split
+from pyspark.sql.functions import explode, split, current_timestamp, window, col
 
 # Create a local StreamingContext with two working thread and batch interval of 5 second
 spark = SparkSession.builder \
@@ -32,13 +31,32 @@ words = lines.select(
     current_timestamp().alias('timestamp')
 )
 
-#counts = words.groupby('word').count()
+words = words.withWatermark('timestamp', '1 minute')
+
+# maak windows van 5 seconden aan
+counts = words.groupby( # group by op 2 niveaus, eerste niveau is per window dan per woord
+    window(words.timestamp, '5 seconds', '1 seconds'), 
+    words.word).count()
+
+# maak de output iets duidelijker -> haal start en eindtijstip uit de window kolom
+counts = counts.withColumn('window_start', col('window.start')) \
+    .withColumn('window_end', col('window.end')) \
+    .drop('window')
 
 # naar waar moet de streaming data?
-query = words.writeStream \
-    .outputMode('update') \
-    .format('console') \
-    .start()
+#query = counts.writeStream \
+#    .outputMode('update') \
+#    .format('console') \
+#    .start()
 # complete outputmode: anders krijg je een error die zegt dat append niet ondersteund wordt bij groupby
 
-query.awaitTermination()
+#query.awaitTermination()
+
+output_path = 's3a://04-streaming/output'
+query_csv = counts.writeStream \
+    .outputMode('append') \
+    .format('csv') \
+    .option('path', output_path) \
+    .option('checkpointLocation', output_path + '_checkpoints') \
+    .start()
+query_csv.awaitTermination()
